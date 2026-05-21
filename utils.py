@@ -19,11 +19,12 @@ class StableMarkovChain:
         else:
             self.transition_matrix = transition_matrix
 
-    def fit(self, df, decay_rate=0.1):
+    def fit(self, decay_rate=0.1):
         """
         Fits a single, global party-to-party transition matrix across all years,
         applying exponential weights to prioritize more recent election cycles.
         """
+        df = self.df
         # 1. Prepare features (X) and targets (y)
         X_all = df.iloc[:-1].values  # Vote shares at time t
         y_all = df.iloc[1:].values   # Vote shares at time t+1
@@ -80,24 +81,24 @@ class StableMarkovChain:
             print("Warning: Optimization failed to converge.")
 
     def get_steady_state(self):
-            if isinstance(self.transition_matrix, pd.DataFrame):
-                P = self.transition_matrix.values
-            else:
-                P = self.transition_matrix
+        if isinstance(self.transition_matrix, pd.DataFrame):
+            P = self.transition_matrix.values
+        else:
+            P = self.transition_matrix
 
-            # FIX: Transpose P to look for LEFT eigenvectors (pi @ P = pi)
-            eigenvalues, eigenvectors = np.linalg.eig(P.T)
+        # FIX: Transpose P to look for LEFT eigenvectors (pi @ P = pi)
+        eigenvalues, eigenvectors = np.linalg.eig(P.T)
 
-            # Find the index of the eigenvalue closest to 1
-            idx = np.argmin(np.abs(eigenvalues - 1))
+        # Find the index of the eigenvalue closest to 1
+        idx = np.argmin(np.abs(eigenvalues - 1))
 
-            # Extract the vector and normalize (sum = 1)
-            pi = np.real(eigenvectors[:, idx])
-            pi = pi / pi.sum()
+        # Extract the vector and normalize (sum = 1)
+        pi = np.real(eigenvectors[:, idx])
+        pi = pi / pi.sum()
 
-            steady_state = pd.Series(pi, index=self.columns)
-            self.steady_state = steady_state
-            return steady_state
+        steady_state = pd.Series(pi, index=self.columns)
+        self.steady_state = steady_state
+        return steady_state
 
     def __str__(self):
         output = f"Stable Markov Chain Model ({self.num_rows} Years, {self.num_columns} Parties)\n"
