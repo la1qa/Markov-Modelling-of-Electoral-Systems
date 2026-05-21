@@ -210,6 +210,60 @@ class StableMarkovChain:
         plt.title("Solució Estable", pad=25, fontsize=13, weight='bold', color='#1A1A1A')
         plt.tight_layout()
         plt.show()
+        
+    def verify_steady_state(self):
+        """
+        Verifica les hipòtesis d'existència d'una única distribució estacionària.
+        """
+        if isinstance(self.transition_matrix, pd.DataFrame):
+            P = self.transition_matrix.values
+        else:
+            P = self.transition_matrix
+
+        n = P.shape[0]
+
+        print("VERIFICACIÓ DE L'EXISTÈNCIA DE LA DISTR. ESTACIONÀRIA")
+
+        # ── 1. Matriu estocàstica ──
+        sumes_files = P.sum(axis=1)
+        files_sumen_1 = np.allclose(sumes_files, 1)
+        valors_no_negatius = np.all(P >= -1e-10)
+        print(f"\n1. Matriu estocàstica:")
+        print(f"   · Sumes de cada fila: {np.round(sumes_files, 6)}")
+        print(f"   · Files sumen 1:      {files_sumen_1}")
+        print(f"   · Valors no negatius: {valors_no_negatius}")
+        es_estocàstica = files_sumen_1 and valors_no_negatius
+
+        if not es_estocàstica:
+            print("\nNo és matriu estocàstica. Para.")
+            return False
+
+        # ── 2. Irreductibilitat ──
+        reach = np.eye(n) + P
+        reach_pow = np.linalg.matrix_power(reach, n - 1)
+        irreductible = np.all(reach_pow > 1e-10)
+        print(f"\n2. Irreductibilitat (tots els estats es comuniquen): {irreductible}")
+
+        if not irreductible:
+            print("\nNo és irreductible. Para.")
+            return False
+
+        # ── 3. Aperiodicitat ──
+        te_self_loops = np.any(np.diag(P) > 0)
+        print(f"\n3. Aperiodicitat (self-loops a la diagonal): {te_self_loops}")
+        if te_self_loops:
+            print(f"   → La cadena és APERIÒDICA")
+        else:
+            print(f"   → Cal anàlisi addicional del GCD dels cicles")
+
+        if not te_self_loops:
+            print("\nNo es pot garantir aperiodicitat.")
+            return False
+
+        # ── Veredicte ──
+        print("\nEXISTEIX distribució estacionària ÚNICA")
+        return True
+
 
 if __name__ == "__main__":
     # Stable election data (No NaNs, same parties)
