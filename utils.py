@@ -53,8 +53,11 @@ class StableMarkovChain:
             
             # Apply our time weights row-by-row (element-wise multiplication)
             weighted_errors = squared_errors * time_weights
+
+            # Dins de la funció objective(P_flat):
+            fidelitat = 0.01 * np.mean((P - np.eye(n_parties)) ** 2)
+            return np.mean(weighted_errors) + fidelitat
             
-            return np.mean(weighted_errors)
         
         # --- Constraints & Bounds (Markov Probability Rules) ---
         constraints = []
