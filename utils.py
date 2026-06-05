@@ -20,7 +20,7 @@ class StableMarkovChain:
         else:
             self.transition_matrix = transition_matrix
 
-    def fit(self, decay_rate=0.1, threshold=0.01):
+    def fit(self, decay_rate=0.2, sparse_threshold=1e-9, fidelitat_threshold=0.001):
         """
         Ajusta una matriu de transició global partit-a-partit per tots els anys,
         aplicant pesos exponencials per prioritzar els cicles electorals més recents.
@@ -61,7 +61,7 @@ class StableMarkovChain:
 
             # Terme de fidelitat: penalitza allunyar-se de la identitat
             # Valor baix (0.01) perquè tenim moltes dades i no cal molta regularització
-            fidelitat = threshold * np.mean((P - np.eye(n_parties)) ** 2)
+            fidelitat = fidelitat_threshold * np.mean((P - np.eye(n_parties)) ** 2)
             return np.mean(weighted_errors) + fidelitat
             
         # --- Restriccions i límits (regles de probabilitat de Markov) ---
@@ -86,7 +86,7 @@ class StableMarkovChain:
             optimized_matrix = res.x.reshape((n_parties, n_parties))
             
             # Apliquem threshold: valors menors que el llindar es posen a 0
-            optimized_matrix[optimized_matrix < threshold] = 0
+            optimized_matrix[optimized_matrix < sparse_threshold] = 0
             
             # Renormalitzem columnes perquè segueixin sumant 1
             col_sums = optimized_matrix.sum(axis=0, keepdims=True)
