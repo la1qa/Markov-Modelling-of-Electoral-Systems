@@ -97,30 +97,84 @@ class StableMarkovChain:
             print(f"Pesos aplicats per pas (de més antic a més recent): {np.round(time_weights, 2)}")
         else:
             print("Avís: L'optimització no ha convergit.")
-
+            
     def get_steady_state(self):
         """
+        Calcula la distribució estacionària π de forma robusta.
+        """
+        P = self.transition_matrix.values if isinstance(self.transition_matrix, pd.DataFrame) else self.transition_matrix
+        n = P.shape[0]
+
+        # 1. Crear el graf explícitament com a dirigit
+        G = nx.DiGraph()
+        for i in range(n):
+            for j in range(n):
+                if P[i, j] > 0:
+                    G.add_edge(i, j) # Afegim les connexions (i -> j)
+
+        # 2. Comprovar la connectivitat forta en un graf dirigit
+        is_irreducible = nx.is_strongly_connected(G)
+        
+        # 3. Mapeig d'etiquetes segur
+        labels = self.columns if (isinstance(self.transition_matrix, pd.DataFrame) and len(self.columns) == n) else [f"Estat_{i}" for i in range(n)]
+
+        if is_irreducible:
+            # CAS IRREDUCTIBLE
+            eigenvalues, eigenvectors = np.linalg.eig(P)
+            idx = np.argmin(np.abs(eigenvalues - 1))
+            pi = np.real(eigenvectors[:, idx])
+            pi = pi / pi.sum()
+            steady_state = pd.Series(pi, index=labels)
+        else:
+            print("La matriu és reductible. Calculant comportament a llarg termini...")
+            P_n = np.linalg.matrix_power(P, 1000)
+            steady_state_avg = P_n.mean(axis=1) 
+            steady_state = pd.Series(steady_state_avg, index=labels)
+            
+        self.steady_state = steady_state
+        return steady_state
+    """def get_steady_state(self):
+        
         Calcula la distribució estacionària π tal que P @ π = π.
         Convenció columna suma 1: busquem el vector propi DRET de P associat a λ=1.
-        """
+    
         if isinstance(self.transition_matrix, pd.DataFrame):
             P = self.transition_matrix.values
         else:
             P = self.transition_matrix
+        
+        # 2. Comprovem irreductibilitat
+        G = nx.DiGraph()
+        n = P.shape[0]
+        for i in range(n):
+            for j in range(n):
+                if P[i, j] > 0:
+                    G.add_edge(j, i)
+        is_irreducible = nx.is_strongly_connected(G)
+        
+        if is_irreducible:
 
-        # Convenció columna: busquem vectors propis DRETS (P @ v = v)
-        eigenvalues, eigenvectors = np.linalg.eig(P)
+            # Convenció columna: busquem vectors propis DRETS (P @ v = v)
+            eigenvalues, eigenvectors = np.linalg.eig(P)
 
-        # Trobem l'índex del valor propi més proper a 1
-        idx = np.argmin(np.abs(eigenvalues - 1))
+            # Trobem l'índex del valor propi més proper a 1
+            idx = np.argmin(np.abs(eigenvalues - 1))
 
-        # Extraiem el vector i normalitzem (suma = 1)
-        pi = np.real(eigenvectors[:, idx])
-        pi = pi / pi.sum()
+            # Extraiem el vector i normalitzem (suma = 1)
+            pi = np.real(eigenvectors[:, idx])
+            pi = pi / pi.sum()
 
-        steady_state = pd.Series(pi, index=self.columns)
-        self.steady_state = steady_state
-        return steady_state
+            steady_state = pd.Series(pi, index=self.columns)
+            self.steady_state = steady_state
+            return steady_state
+        else:
+            print("La matriu no és irreductible. No es pot garantir una distribució estacionària única.")
+            print("Calculant el comportament a llarg termini buscant classes absorbents...")
+            P_n = np.linalg.matrix_power(P, 1000)
+            steady_state_avg = P_n.mean(axis=1)  
+            steady_state = pd.Series(steady_state_avg, index=self.columns)           
+            self.steady_state = steady_state
+            return steady_state"""
 
     def __str__(self):
         output = f"Model de Cadena de Markov Estable ({self.num_rows} Anys, {self.num_columns} Partits)\n"
@@ -253,7 +307,7 @@ class StableMarkovChain:
         es_estocàstica = columnes_sumen_1 and valors_no_negatius
 
         if not es_estocàstica:
-            print("\nNo és matriu estocàstica. Para.")
+            print("\nNo és matriu estocàstica.")
             return False
 
         # ── 2. Irreductibilitat mitjançant graf dirigit (networkx) ──
@@ -268,7 +322,7 @@ class StableMarkovChain:
         print(f"\n2. Irreductibilitat (tots els estats es comuniquen): {irreductible}")
 
         if not irreductible:
-            print("\nNo és irreductible. Para.")
+            print("\nNo és irreductible. ÉS REDUCTIBLE → No es pot garantir una distribució estacionària única.")
             return False
 
         # ── 3. Aperiodicitat: self-loops a la diagonal ──
@@ -287,11 +341,13 @@ class StableMarkovChain:
         print("\nEXISTEIX distribució estacionària ÚNICA")
         return True
 
+
+
     def plot_graph(self):
         """
-        Visualitza el graf de transició i indica si la cadena és
-        irreductible (blau) o reductible (vermell).
+        Visualitza el graf amb self-loops clars, fletxes visibles i estètica neta.
         """
+
         if isinstance(self.transition_matrix, pd.DataFrame):
             P = self.transition_matrix.values
             labels = list(self.transition_matrix.columns)
@@ -300,40 +356,131 @@ class StableMarkovChain:
             labels = [f"P{i}" for i in range(len(P))]
 
         G = nx.DiGraph()
-        G.add_nodes_from(labels)
-        
-        # Afegim arestes per tots els valors positius (la matriu ja ve neta del fit)
         for i, row in enumerate(labels):
             for j, col in enumerate(labels):
-                if P[i, j] > 0:
-                    G.add_edge(row, col, weight=round(P[i, j], 3))
+                if P[i, j] > 1e-9:
+                    G.add_edge(row, col, weight=P[i, j])
 
-        # Verifiquem irreductibilitat i aperiodicitat
-        is_irreducible = nx.is_strongly_connected(G)
-        has_selfloops = any(G.has_edge(n, n) for n in G.nodes)
+        fig, ax = plt.subplots(figsize=(16, 12))
+        ax.set_facecolor('white')
+        fig.patch.set_facecolor('white')
 
-        pos = nx.circular_layout(G)
-        edge_labels = nx.get_edge_attributes(G, 'weight')
-        
-        # Blau = irreductible, vermell = reductible
-        node_color = 'steelblue' if is_irreducible else 'salmon'
-        
-        plt.figure(figsize=(7, 5))
-        nx.draw_networkx_nodes(G, pos, node_size=1200, node_color=node_color)
-        nx.draw_networkx_labels(G, pos, font_color='white', font_size=10)
-        nx.draw_networkx_edges(G, pos, connectionstyle='arc3,rad=0.2', 
-                            arrows=True, arrowsize=20)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
-        
-        title = f"Graf de transició | Irreductible: {is_irreducible} | Self-loops: {has_selfloops}"
-        plt.title(title)
-        plt.axis('off')
+        pos = nx.spring_layout(G, k=1.2, seed=42)
+
+        # Paleta de colors — un per node/origen
+        palette = [
+            '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
+            '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
+        ]
+        node_colors = {node: palette[i % len(palette)] for i, node in enumerate(G.nodes())}
+
+        node_radius = 0.07
+
+        # ── Nodes ──────────────────────────────────────────────────────────────
+        for node, (x, y) in pos.items():
+            circle = plt.Circle((x, y), node_radius,
+                                color=node_colors[node],
+                                zorder=5, linewidth=2,
+                                edgecolor='white')
+            ax.add_patch(circle)
+            ax.text(x, y, str(node),
+                    ha='center', va='center',
+                    fontsize=8, fontweight='bold',
+                    color='white', zorder=6,
+                    fontfamily='monospace')
+
+        # ── Edges ──────────────────────────────────────────────────────────────
+        edge_label_positions = {}
+
+        for (u, v, data) in G.edges(data=True):
+            w = data['weight']
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            color = node_colors[u]  # color del node origen
+
+            # ── Self-loop ──────────────────────────────────────────────────────
+            if u == v:
+                loop_radius = 0.12
+                theta = np.pi / 2
+                neighbors = list(G.predecessors(u)) + list(G.neighbors(u))
+                angles = []
+                for nb in neighbors:
+                    if nb != u:
+                        nx_, ny_ = pos[nb]
+                        angles.append(np.arctan2(ny_ - y1, nx_ - x1))
+                if angles:
+                    angles_r = sorted(set([round(a, 1) for a in angles]))
+                    candidates = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+                    best = max(candidates,
+                            key=lambda c: min(abs(c - a) for a in angles_r))
+                    theta = best
+
+                cx = x1 + loop_radius * np.cos(theta)
+                cy = y1 + loop_radius * np.sin(theta)
+                loop = plt.Circle((cx, cy), loop_radius * 0.85,
+                                fill=False, color=color,
+                                linewidth=1.8, zorder=3)
+                ax.add_patch(loop)
+
+                angle_arrow = theta + np.pi + 0.3
+                ax_tip = cx + loop_radius * 0.85 * np.cos(angle_arrow)
+                ay_tip = cy + loop_radius * 0.85 * np.sin(angle_arrow)
+                ax.annotate('', xy=(ax_tip, ay_tip),
+                            xytext=(ax_tip - 0.001 * np.cos(angle_arrow + np.pi / 2),
+                                    ay_tip - 0.001 * np.sin(angle_arrow + np.pi / 2)),
+                            arrowprops=dict(arrowstyle='-|>', color=color,
+                                            lw=1.8, mutation_scale=18),
+                            zorder=4)
+
+                lx = cx + loop_radius * 1.1 * np.cos(theta)
+                ly = cy + loop_radius * 1.1 * np.sin(theta)
+                edge_label_positions[(u, v)] = (lx, ly)
+
+            # ── Edge normal ────────────────────────────────────────────────────
+            else:
+                rad = 0.25 if G.has_edge(v, u) else 0.0
+                angle = np.arctan2(y2 - y1, x2 - x1)
+                sx = x1 + node_radius * np.cos(angle)
+                sy = y1 + node_radius * np.sin(angle)
+                ex = x2 - node_radius * np.cos(angle)
+                ey = y2 - node_radius * np.sin(angle)
+
+                style = f"arc3,rad={rad}"
+                ax.annotate('', xy=(ex, ey), xytext=(sx, sy),
+                            arrowprops=dict(arrowstyle='-|>',
+                                            color=color,
+                                            lw=1.4,
+                                            connectionstyle=style,
+                                            mutation_scale=20),
+                            zorder=3)
+
+                if rad != 0.0:
+                    mx = (sx + ex) / 2 + rad * 0.5 * np.sin(angle) * (-1 if rad > 0 else 1)
+                    my = (sy + ey) / 2 - rad * 0.5 * np.cos(angle) * (-1 if rad > 0 else 1)
+                else:
+                    mx = (sx + ex) / 2
+                    my = (sy + ey) / 2
+                edge_label_positions[(u, v)] = (mx, my)
+
+        # ── Labels dels pesos ──────────────────────────────────────────────────
+        for (u, v), (lx, ly) in edge_label_positions.items():
+            w = G[u][v]['weight']
+            ax.text(lx, ly, f"{w:.3g}",
+                    fontsize=7, ha='center', va='center',
+                    fontfamily='monospace', color='#222222',
+                    bbox=dict(facecolor='white', edgecolor='#cccccc',
+                            boxstyle='round,pad=0.25', alpha=0.95, linewidth=0.8),
+                    zorder=7)
+
+        # ── Títol i acabats ────────────────────────────────────────────────────
+        ax.set_title("Graf de Transicions · Estructura de l'Oligopoli",
+                    fontsize=14, fontweight='bold', color='#1a1a1a',
+                    pad=16, fontfamily='monospace')
+        ax.set_xlim(-1.4, 1.4)
+        ax.set_ylim(-1.4, 1.4)
+        ax.axis('off')
         plt.tight_layout()
         plt.show()
-        
-        return is_irreducible, has_selfloops
-
-
 if __name__ == "__main__":
     # Dades electorals d'exemple (sense NaNs, mateixos partits)
     data = {
@@ -355,3 +502,5 @@ if __name__ == "__main__":
     mc.plot_transition_matrix()
     mc.plot_steady_state()
     mc.plot_graph()
+    
+    
