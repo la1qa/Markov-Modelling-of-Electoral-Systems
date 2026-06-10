@@ -188,9 +188,35 @@ class StableMarkovChain:
     
     def plot_transition_matrix(self):
         """Visualitza la matriu de transició com a heatmap."""
-        plt.figure(figsize=(6, 4))
-        sns.heatmap(self.transition_matrix, annot=True, cmap="Blues", cbar=False, linewidths=0.5)
-        plt.title("Matriu de Transició")
+
+        data = self.transition_matrix
+
+        # Create custom annotation: "0" if zero, otherwise 2 decimals
+        annot = np.where(
+            data == 0,
+            "",
+            np.vectorize(lambda x: f"{x:.2f}")(data)
+        )
+
+        plt.figure(figsize=(11, 7))
+
+        sns.heatmap(
+            data,
+            annot=annot,
+            fmt="",                 # important: disable default formatting
+            cmap="Blues",
+            vmin=0, vmax=1,
+            linewidths=0.5,
+            linecolor="white",
+            square=True,
+            cbar=True,
+            cbar_kws={"shrink": 0.85}
+        )
+
+        plt.title("Matriu de Transició", fontsize=14, pad=10)
+        plt.xlabel("Estat actual (t)")
+        plt.ylabel("Estat següent (t+1)")
+        plt.tight_layout()
         plt.show()
 
     def plot_steady_state(self):
@@ -370,6 +396,30 @@ class StableMarkovChain:
             '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
             '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
         ]
+
+        # def get_category(label, palette=palette):
+        #     if label in palette.keys():
+        #         return 
+        #     if 
+
+        # palette = {
+        #     "PP": "#2E86AB",
+        #     "ALIANÇA": "#1B4F72",
+        #     "Junts": "#44BBA4",
+        #     "ERC": "#F18F01",
+        #     "Abstenció": "#GGGGGG",
+        #     "CUP": "#EDCA41",
+        #     "VOX": "#10891C",
+        #     "PSOE": "#C73E1D",
+        #     "COMUNS": "#B70DAE",
+        #     "Cs": "#FF5C1C"
+        # }
+
+        # node_colors = {
+        #     node: palette[get_category(node)]
+        #     for node in G.nodes()
+        # }
+
         node_colors = {node: palette[i % len(palette)] for i, node in enumerate(G.nodes())}
 
         node_radius = 0.07
