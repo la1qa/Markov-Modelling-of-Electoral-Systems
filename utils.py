@@ -341,11 +341,10 @@ class StableMarkovChain:
         print("\nEXISTEIX distribució estacionària ÚNICA")
         return True
 
-
-
     def plot_graph(self):
         """
         Visualitza el graf amb self-loops clars, fletxes visibles i estètica neta.
+        Edges thickness is proportional to transition probability.
         """
 
         if isinstance(self.transition_matrix, pd.DataFrame):
@@ -367,7 +366,6 @@ class StableMarkovChain:
 
         pos = nx.spring_layout(G, k=1.2, seed=42)
 
-        # Paleta de colors — un per node/origen
         palette = [
             '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
             '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
@@ -376,111 +374,174 @@ class StableMarkovChain:
 
         node_radius = 0.07
 
-        # ── Nodes ──────────────────────────────────────────────────────────────
-        for node, (x, y) in pos.items():
-            circle = plt.Circle((x, y), node_radius,
-                                color=node_colors[node],
-                                zorder=5, linewidth=2,
-                                edgecolor='white')
-            ax.add_patch(circle)
-            ax.text(x, y, str(node),
-                    ha='center', va='center',
-                    fontsize=8, fontweight='bold',
-                    color='white', zorder=6,
-                    fontfamily='monospace')
+        # --- helper: scale widths ---
+        weights = [d["weight"] for _, _, d in G.edges(data=True)]
+        w_min, w_max = min(weights), max(weights)
 
-        # ── Edges ──────────────────────────────────────────────────────────────
+        def scale_width(w, min_w=0.8, max_w=6.0):
+            if w_max == w_min:
+                return (min_w + max_w) / 2
+            norm = (w - w_min) / (w_max - w_min)
+            return min_w + (max_w - min_w) * norm
+
+        # --- Nodes ---
+        for node, (x, y) in pos.items():
+            circle = plt.Circle(
+                (x, y),
+                node_radius,
+                color=node_colors[node],
+                zorder=5,
+                linewidth=2,
+                edgecolor='white'
+            )
+            ax.add_patch(circle)
+            ax.text(
+                x, y, str(node),
+                ha='center', va='center',
+                fontsize=8, fontweight='bold',
+                color='white',
+                zorder=6,
+                fontfamily='monospace'
+            )
+
+        # --- Edges ---
         edge_label_positions = {}
 
         for (u, v, data) in G.edges(data=True):
             w = data['weight']
+            edge_width = scale_width(w)
+
             x1, y1 = pos[u]
             x2, y2 = pos[v]
-            color = node_colors[u]  # color del node origen
+            color = node_colors[u]
 
-            # ── Self-loop ──────────────────────────────────────────────────────
+            # --- self-loop ---
             if u == v:
                 loop_radius = 0.12
                 theta = np.pi / 2
+
                 neighbors = list(G.predecessors(u)) + list(G.neighbors(u))
                 angles = []
                 for nb in neighbors:
                     if nb != u:
                         nx_, ny_ = pos[nb]
                         angles.append(np.arctan2(ny_ - y1, nx_ - x1))
+
                 if angles:
                     angles_r = sorted(set([round(a, 1) for a in angles]))
                     candidates = np.linspace(0, 2 * np.pi, 16, endpoint=False)
-                    best = max(candidates,
-                            key=lambda c: min(abs(c - a) for a in angles_r))
-                    theta = best
+                    theta = max(
+                        candidates,
+                        key=lambda c: min(abs(c - a) for a in angles_r)
+                    )
 
                 cx = x1 + loop_radius * np.cos(theta)
                 cy = y1 + loop_radius * np.sin(theta)
-                loop = plt.Circle((cx, cy), loop_radius * 0.85,
-                                fill=False, color=color,
-                                linewidth=1.8, zorder=3)
+
+                loop = plt.Circle(
+                    (cx, cy),
+                    loop_radius * 0.85,
+                    fill=False,
+                    color=color,
+                    linewidth=edge_width,
+                    zorder=3
+                )
                 ax.add_patch(loop)
 
                 angle_arrow = theta + np.pi + 0.3
                 ax_tip = cx + loop_radius * 0.85 * np.cos(angle_arrow)
                 ay_tip = cy + loop_radius * 0.85 * np.sin(angle_arrow)
-                ax.annotate('', xy=(ax_tip, ay_tip),
-                            xytext=(ax_tip - 0.001 * np.cos(angle_arrow + np.pi / 2),
-                                    ay_tip - 0.001 * np.sin(angle_arrow + np.pi / 2)),
-                            arrowprops=dict(arrowstyle='-|>', color=color,
-                                            lw=1.8, mutation_scale=18),
-                            zorder=4)
+
+                ax.annotate(
+                    '',
+                    xy=(ax_tip, ay_tip),
+                    xytext=(
+                        ax_tip - 0.001 * np.cos(angle_arrow + np.pi / 2),
+                        ay_tip - 0.001 * np.sin(angle_arrow + np.pi / 2)
+                    ),
+                    arrowprops=dict(
+                        arrowstyle='-|>',
+                        color=color,
+                        lw=edge_width,
+                        mutation_scale=18
+                    ),
+                    zorder=4
+                )
 
                 lx = cx + loop_radius * 1.1 * np.cos(theta)
                 ly = cy + loop_radius * 1.1 * np.sin(theta)
                 edge_label_positions[(u, v)] = (lx, ly)
 
-            # ── Edge normal ────────────────────────────────────────────────────
+            # --- normal edge ---
             else:
                 rad = 0.25 if G.has_edge(v, u) else 0.0
                 angle = np.arctan2(y2 - y1, x2 - x1)
+
                 sx = x1 + node_radius * np.cos(angle)
                 sy = y1 + node_radius * np.sin(angle)
                 ex = x2 - node_radius * np.cos(angle)
                 ey = y2 - node_radius * np.sin(angle)
 
                 style = f"arc3,rad={rad}"
-                ax.annotate('', xy=(ex, ey), xytext=(sx, sy),
-                            arrowprops=dict(arrowstyle='-|>',
-                                            color=color,
-                                            lw=1.4,
-                                            connectionstyle=style,
-                                            mutation_scale=20),
-                            zorder=3)
+
+                ax.annotate(
+                    '',
+                    xy=(ex, ey),
+                    xytext=(sx, sy),
+                    arrowprops=dict(
+                        arrowstyle='-|>',
+                        color=color,
+                        lw=edge_width,
+                        connectionstyle=style,
+                        mutation_scale=20
+                    ),
+                    zorder=3
+                )
 
                 if rad != 0.0:
                     mx = (sx + ex) / 2 + rad * 0.5 * np.sin(angle) * (-1 if rad > 0 else 1)
                     my = (sy + ey) / 2 - rad * 0.5 * np.cos(angle) * (-1 if rad > 0 else 1)
                 else:
-                    mx = (sx + ex) / 2
-                    my = (sy + ey) / 2
+                    mx, my = (sx + ex) / 2, (sy + ey) / 2
+
                 edge_label_positions[(u, v)] = (mx, my)
 
-        # ── Labels dels pesos ──────────────────────────────────────────────────
+        # --- edge labels ---
         for (u, v), (lx, ly) in edge_label_positions.items():
             w = G[u][v]['weight']
-            ax.text(lx, ly, f"{w:.3g}",
-                    fontsize=7, ha='center', va='center',
-                    fontfamily='monospace', color='#222222',
-                    bbox=dict(facecolor='white', edgecolor='#cccccc',
-                            boxstyle='round,pad=0.25', alpha=0.95, linewidth=0.8),
-                    zorder=7)
+            ax.text(
+                lx, ly, f"{w:.3g}",
+                fontsize=7,
+                ha='center',
+                va='center',
+                fontfamily='monospace',
+                color='#222222',
+                bbox=dict(
+                    facecolor='white',
+                    edgecolor='#cccccc',
+                    boxstyle='round,pad=0.25',
+                    alpha=0.95,
+                    linewidth=0.8
+                ),
+                zorder=7
+            )
 
-        # ── Títol i acabats ────────────────────────────────────────────────────
-        ax.set_title("Graf de Transicions · Estructura de l'Oligopoli",
-                    fontsize=14, fontweight='bold', color='#1a1a1a',
-                    pad=16, fontfamily='monospace')
+        ax.set_title(
+            "Graf de Transicions · Estructura de l'Oligopoli",
+            fontsize=14,
+            fontweight='bold',
+            color='#1a1a1a',
+            pad=16,
+            fontfamily='monospace'
+        )
+
         ax.set_xlim(-1.4, 1.4)
         ax.set_ylim(-1.4, 1.4)
         ax.axis('off')
+
         plt.tight_layout()
         plt.show()
+
 if __name__ == "__main__":
     # Dades electorals d'exemple (sense NaNs, mateixos partits)
     data = {
