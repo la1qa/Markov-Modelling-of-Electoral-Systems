@@ -4,6 +4,10 @@ from scipy.optimize import minimize
 import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
+from pyvis.network import Network
+import plotly.graph_objects as go
+from pycirclize import Circos
+from pycirclize.parser import Matrix
 
 class StableMarkovChain:
     def __init__(self, df, transition_matrix=None):
@@ -252,11 +256,18 @@ class StableMarkovChain:
         # 5. Afegim la porció dummy per tancar el semicercle
         shares_with_dummy = normalized_shares + [1.0]
         
-        # 6. Generem colors dinàmicament amb el mapa 'viridis'
-        # Mostregem entre 0.2 i 0.85 per evitar colors massa clars o foscos
+        # 6. Generem colors dinàmics amb paleta qualitativa per distingir millor
         num_active = len(normalized_shares)
-        cmap = plt.cm.get_cmap('viridis')
-        active_colors = cmap(np.linspace(0.2, 0.85, num_active))
+        custom_palette = [
+            '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
+            '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
+        ]
+        # Repeat palette if more colors are needed
+        if num_active <= len(custom_palette):
+            active_colors = custom_palette[:num_active]
+        else:
+            reps = (num_active // len(custom_palette)) + 1
+            active_colors = (custom_palette * reps)[:num_active]
         
         # Color completament transparent per la meitat inferior oculta
         colors_with_dummy = list(active_colors) + [(0, 0, 0, 0)]
@@ -367,12 +378,286 @@ class StableMarkovChain:
         print("\nEXISTEIX distribució estacionària ÚNICA")
         return True
 
+    # def plot_graph(self):
+    #     """
+    #     Visualitza el graf amb self-loops clars, fletxes visibles i estètica neta.
+    #     Edges thickness is proportional to transition probability.
+    #     """
+
+    #     if isinstance(self.transition_matrix, pd.DataFrame):
+    #         P = self.transition_matrix.values
+    #         labels = list(self.transition_matrix.columns)
+    #     else:
+    #         P = self.transition_matrix
+    #         labels = [f"P{i}" for i in range(len(P))]
+
+    #     G = nx.DiGraph()
+    #     for i, row in enumerate(labels):
+    #         for j, col in enumerate(labels):
+    #             if P[i, j] > 1e-9:
+    #                 G.add_edge(row, col, weight=P[i, j])
+
+    #     fig, ax = plt.subplots(figsize=(16, 12))
+    #     ax.set_facecolor('white')
+    #     fig.patch.set_facecolor('white')
+
+    #     pos = nx.spring_layout(G, k=1.2, seed=42)
+
+    #     palette = [
+    #         '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
+    #         '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
+    #     ]
+
+    #     # def get_category(label, palette=palette):
+    #     #     if label in palette.keys():
+    #     #         return 
+    #     #     if 
+
+    #     # palette = {
+    #     #     "PP": "#2E86AB",
+    #     #     "ALIANÇA": "#1B4F72",
+    #     #     "Junts": "#44BBA4",
+    #     #     "ERC": "#F18F01",
+    #     #     "Abstenció": "#GGGGGG",
+    #     #     "CUP": "#EDCA41",
+    #     #     "VOX": "#10891C",
+    #     #     "PSOE": "#C73E1D",
+    #     #     "COMUNS": "#B70DAE",
+    #     #     "Cs": "#FF5C1C"
+    #     # }
+
+    #     # node_colors = {
+    #     #     node: palette[get_category(node)]
+    #     #     for node in G.nodes()
+    #     # }
+
+    #     node_colors = {node: palette[i % len(palette)] for i, node in enumerate(G.nodes())}
+
+    #     node_radius = 0.07
+
+    #     # --- helper: scale widths ---
+    #     weights = [d["weight"] for _, _, d in G.edges(data=True)]
+    #     w_min, w_max = min(weights), max(weights)
+
+    #     def scale_width(w, min_w=0.8, max_w=6.0):
+    #         if w_max == w_min:
+    #             return (min_w + max_w) / 2
+    #         norm = (w - w_min) / (w_max - w_min)
+    #         return min_w + (max_w - min_w) * norm
+
+    #     # --- Nodes ---
+    #     for node, (x, y) in pos.items():
+    #         circle = plt.Circle(
+    #             (x, y),
+    #             node_radius,
+    #             color=node_colors[node],
+    #             zorder=5,
+    #             linewidth=2,
+    #             edgecolor='white'
+    #         )
+    #         ax.add_patch(circle)
+    #         ax.text(
+    #             x, y, str(node),
+    #             ha='center', va='center',
+    #             fontsize=8, fontweight='bold',
+    #             color='white',
+    #             zorder=6,
+    #             fontfamily='monospace'
+    #         )
+
+    #     # --- Edges ---
+    #     edge_label_positions = {}
+
+    #     for (u, v, data) in G.edges(data=True):
+    #         w = data['weight']
+    #         edge_width = scale_width(w)
+
+    #         x1, y1 = pos[u]
+    #         x2, y2 = pos[v]
+    #         color = node_colors[u]
+
+    #         # --- self-loop ---
+    #         if u == v:
+    #             loop_radius = 0.12
+    #             theta = np.pi / 2
+
+    #             neighbors = list(G.predecessors(u)) + list(G.neighbors(u))
+    #             angles = []
+    #             for nb in neighbors:
+    #                 if nb != u:
+    #                     nx_, ny_ = pos[nb]
+    #                     angles.append(np.arctan2(ny_ - y1, nx_ - x1))
+
+    #             if angles:
+    #                 angles_r = sorted(set([round(a, 1) for a in angles]))
+    #                 candidates = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+    #                 theta = max(
+    #                     candidates,
+    #                     key=lambda c: min(abs(c - a) for a in angles_r)
+    #                 )
+
+    #             cx = x1 + loop_radius * np.cos(theta)
+    #             cy = y1 + loop_radius * np.sin(theta)
+
+    #             loop = plt.Circle(
+    #                 (cx, cy),
+    #                 loop_radius * 0.85,
+    #                 fill=False,
+    #                 color=color,
+    #                 linewidth=edge_width,
+    #                 zorder=3
+    #             )
+    #             ax.add_patch(loop)
+
+    #             angle_arrow = theta + np.pi + 0.3
+    #             ax_tip = cx + loop_radius * 0.85 * np.cos(angle_arrow)
+    #             ay_tip = cy + loop_radius * 0.85 * np.sin(angle_arrow)
+
+    #             ax.annotate(
+    #                 '',
+    #                 xy=(ax_tip, ay_tip),
+    #                 xytext=(
+    #                     ax_tip - 0.001 * np.cos(angle_arrow + np.pi / 2),
+    #                     ay_tip - 0.001 * np.sin(angle_arrow + np.pi / 2)
+    #                 ),
+    #                 arrowprops=dict(
+    #                     arrowstyle='-|>',
+    #                     color=color,
+    #                     lw=edge_width,
+    #                     mutation_scale=18
+    #                 ),
+    #                 zorder=4
+    #             )
+
+    #             lx = cx + loop_radius * 1.1 * np.cos(theta)
+    #             ly = cy + loop_radius * 1.1 * np.sin(theta)
+    #             edge_label_positions[(u, v)] = (lx, ly)
+
+    #         # --- normal edge ---
+    #         else:
+    #             rad = 0.25 if G.has_edge(v, u) else 0.0
+    #             angle = np.arctan2(y2 - y1, x2 - x1)
+
+    #             sx = x1 + node_radius * np.cos(angle)
+    #             sy = y1 + node_radius * np.sin(angle)
+    #             ex = x2 - node_radius * np.cos(angle)
+    #             ey = y2 - node_radius * np.sin(angle)
+
+    #             style = f"arc3,rad={rad}"
+
+    #             ax.annotate(
+    #                 '',
+    #                 xy=(ex, ey),
+    #                 xytext=(sx, sy),
+    #                 arrowprops=dict(
+    #                     arrowstyle='-|>',
+    #                     color=color,
+    #                     lw=edge_width,
+    #                     connectionstyle=style,
+    #                     mutation_scale=20
+    #                 ),
+    #                 zorder=3
+    #             )
+
+    #             if rad != 0.0:
+    #                 mx = (sx + ex) / 2 + rad * 0.5 * np.sin(angle) * (-1 if rad > 0 else 1)
+    #                 my = (sy + ey) / 2 - rad * 0.5 * np.cos(angle) * (-1 if rad > 0 else 1)
+    #             else:
+    #                 mx, my = (sx + ex) / 2, (sy + ey) / 2
+
+    #             edge_label_positions[(u, v)] = (mx, my)
+
+    #     # --- edge labels ---
+    #     for (u, v), (lx, ly) in edge_label_positions.items():
+    #         w = G[u][v]['weight']
+    #         ax.text(
+    #             lx, ly, f"{w:.3g}",
+    #             fontsize=7,
+    #             ha='center',
+    #             va='center',
+    #             fontfamily='monospace',
+    #             color='#222222',
+    #             bbox=dict(
+    #                 facecolor='white',
+    #                 edgecolor='#cccccc',
+    #                 boxstyle='round,pad=0.25',
+    #                 alpha=0.95,
+    #                 linewidth=0.8
+    #             ),
+    #             zorder=7
+    #         )
+
+    #     ax.set_title(
+    #         "Graf de Transicions · Estructura de l'Oligopoli",
+    #         fontsize=14,
+    #         fontweight='bold',
+    #         color='#1a1a1a',
+    #         pad=16,
+    #         fontfamily='monospace'
+    #     )
+
+    #     ax.set_xlim(-1.4, 1.4)
+    #     ax.set_ylim(-1.4, 1.4)
+    #     ax.axis('off')
+
+    #     plt.tight_layout()
+    #     plt.show()
+
+    def plot_chord(self):
+        # --- extract matrix ---
+        if isinstance(self.transition_matrix, pd.DataFrame):
+            P = self.transition_matrix.values
+            labels = list(self.transition_matrix.columns)
+        else:
+            P = np.asarray(self.transition_matrix)
+            labels = [f"S{i}" for i in range(len(P))]
+
+        P = np.asarray(P, dtype=float)
+        n = len(labels)
+
+        # Build a DataFrame for pycirclize which expects a Matrix-like object with names
+        matrix_df = pd.DataFrame(P, index=labels, columns=labels)
+
+        # Try pycirclize first; if it fails, fall back to a Plotly Sankey
+        try:
+            circos = Circos.initialize_from_matrix(matrix_df, space=3,
+                                                    r_lim=(93, 100),
+                                                    cmap="tab10",
+                                                    ticks_interval=0.5,
+                                                    label_kws=dict(r=94, size=12, color="white"),)
+
+            # Plot and obtain matplotlib Figure
+            fig = circos.plotfig()
+
+            # Save using pycirclize's savefig if available, otherwise use fig.savefig
+            from datetime import datetime
+            fname = f"chord_diagram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            try:
+                circos.savefig(fname)
+            except Exception:
+                try:
+                    fig.savefig(fname, bbox_inches='tight', dpi=150)
+                except Exception:
+                    pass
+
+            return fig
+        except Exception:
+            print("pycirclize no disponible o ha fallado. Usando Plotly para un diagrama de Sankey alternativo.")
+            self.plot_graph()
+            return None
+
     def plot_graph(self):
         """
-        Visualitza el graf amb self-loops clars, fletxes visibles i estètica neta.
-        Edges thickness is proportional to transition probability.
+        Circular layout visualization of transition graph.
+        Edge thickness ∝ transition probability.
         """
 
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import networkx as nx
+        import pandas as pd
+
+        # --- matrix extraction ---
         if isinstance(self.transition_matrix, pd.DataFrame):
             P = self.transition_matrix.values
             labels = list(self.transition_matrix.columns)
@@ -380,217 +665,223 @@ class StableMarkovChain:
             P = self.transition_matrix
             labels = [f"P{i}" for i in range(len(P))]
 
+        # --- build graph ---
         G = nx.DiGraph()
-        for i, row in enumerate(labels):
-            for j, col in enumerate(labels):
+
+        for i, u in enumerate(labels):
+            for j, v in enumerate(labels):
                 if P[i, j] > 1e-9:
-                    G.add_edge(row, col, weight=P[i, j])
+                    G.add_edge(u, v, weight=P[i, j])
 
-        fig, ax = plt.subplots(figsize=(16, 12))
-        ax.set_facecolor('white')
-        fig.patch.set_facecolor('white')
+        # --- layout (circular) ---
+        pos = nx.circular_layout(G, scale=2.5)
 
-        pos = nx.spring_layout(G, k=1.2, seed=42)
+        # --- figure ---
+        fig, ax = plt.subplots(figsize=(12, 12))
+        ax.set_facecolor("white")
+        fig.patch.set_facecolor("white")
 
-        palette = [
+        # --- colors ---
+        # Use custom palette for better distinction
+        custom_palette = [
             '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
             '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
         ]
-
-        # def get_category(label, palette=palette):
-        #     if label in palette.keys():
-        #         return 
-        #     if 
-
-        # palette = {
-        #     "PP": "#2E86AB",
-        #     "ALIANÇA": "#1B4F72",
-        #     "Junts": "#44BBA4",
-        #     "ERC": "#F18F01",
-        #     "Abstenció": "#GGGGGG",
-        #     "CUP": "#EDCA41",
-        #     "VOX": "#10891C",
-        #     "PSOE": "#C73E1D",
-        #     "COMUNS": "#B70DAE",
-        #     "Cs": "#FF5C1C"
-        # }
-
-        # node_colors = {
-        #     node: palette[get_category(node)]
-        #     for node in G.nodes()
-        # }
-
+        n_nodes = len(G.nodes())
+        if n_nodes <= len(custom_palette):
+            palette = custom_palette[:n_nodes]
+        else:
+            reps = (n_nodes // len(custom_palette)) + 1
+            palette = (custom_palette * reps)[:n_nodes]
         node_colors = {node: palette[i % len(palette)] for i, node in enumerate(G.nodes())}
 
-        node_radius = 0.07
-
-        # --- helper: scale widths ---
+        # --- edge width scaling ---
         weights = [d["weight"] for _, _, d in G.edges(data=True)]
         w_min, w_max = min(weights), max(weights)
 
         def scale_width(w, min_w=0.8, max_w=6.0):
             if w_max == w_min:
                 return (min_w + max_w) / 2
-            norm = (w - w_min) / (w_max - w_min)
-            return min_w + (max_w - min_w) * norm
+            return min_w + (max_w - min_w) * (w - w_min) / (w_max - w_min)
 
-        # --- Nodes ---
-        for node, (x, y) in pos.items():
-            circle = plt.Circle(
-                (x, y),
-                node_radius,
-                color=node_colors[node],
-                zorder=5,
-                linewidth=2,
-                edgecolor='white'
-            )
-            ax.add_patch(circle)
+        # --- draw nodes ---
+        for n, (x, y) in pos.items():
+            ax.scatter(x, y, s=900, color=node_colors[n], edgecolors="white", zorder=3)
             ax.text(
-                x, y, str(node),
-                ha='center', va='center',
-                fontsize=8, fontweight='bold',
-                color='white',
-                zorder=6,
-                fontfamily='monospace'
+                x, y, str(n),
+                ha="center", va="center",
+                fontsize=9, color="white", fontweight="bold",
+                zorder=4
             )
 
-        # --- Edges ---
-        edge_label_positions = {}
+        # --- draw edges ---
+        edge_labels = {}
 
-        for (u, v, data) in G.edges(data=True):
-            w = data['weight']
-            edge_width = scale_width(w)
+        for u, v, d in G.edges(data=True):
+            w = d["weight"]
+            width = scale_width(w)
 
             x1, y1 = pos[u]
             x2, y2 = pos[v]
-            color = node_colors[u]
 
-            # --- self-loop ---
+            # self-loop
             if u == v:
-                loop_radius = 0.12
+                loop_radius = 0.25
                 theta = np.pi / 2
-
-                neighbors = list(G.predecessors(u)) + list(G.neighbors(u))
-                angles = []
-                for nb in neighbors:
-                    if nb != u:
-                        nx_, ny_ = pos[nb]
-                        angles.append(np.arctan2(ny_ - y1, nx_ - x1))
-
-                if angles:
-                    angles_r = sorted(set([round(a, 1) for a in angles]))
-                    candidates = np.linspace(0, 2 * np.pi, 16, endpoint=False)
-                    theta = max(
-                        candidates,
-                        key=lambda c: min(abs(c - a) for a in angles_r)
-                    )
 
                 cx = x1 + loop_radius * np.cos(theta)
                 cy = y1 + loop_radius * np.sin(theta)
 
-                loop = plt.Circle(
+                circle = plt.Circle(
                     (cx, cy),
-                    loop_radius * 0.85,
+                    loop_radius,
                     fill=False,
-                    color=color,
-                    linewidth=edge_width,
-                    zorder=3
+                    linewidth=width,
+                    color=node_colors[u],
+                    zorder=2
                 )
-                ax.add_patch(loop)
+                ax.add_patch(circle)
 
-                angle_arrow = theta + np.pi + 0.3
-                ax_tip = cx + loop_radius * 0.85 * np.cos(angle_arrow)
-                ay_tip = cy + loop_radius * 0.85 * np.sin(angle_arrow)
+                edge_labels[(u, v)] = (cx, cy + 0.15)
 
-                ax.annotate(
-                    '',
-                    xy=(ax_tip, ay_tip),
-                    xytext=(
-                        ax_tip - 0.001 * np.cos(angle_arrow + np.pi / 2),
-                        ay_tip - 0.001 * np.sin(angle_arrow + np.pi / 2)
-                    ),
-                    arrowprops=dict(
-                        arrowstyle='-|>',
-                        color=color,
-                        lw=edge_width,
-                        mutation_scale=18
-                    ),
-                    zorder=4
-                )
-
-                lx = cx + loop_radius * 1.1 * np.cos(theta)
-                ly = cy + loop_radius * 1.1 * np.sin(theta)
-                edge_label_positions[(u, v)] = (lx, ly)
-
-            # --- normal edge ---
             else:
                 rad = 0.25 if G.has_edge(v, u) else 0.0
-                angle = np.arctan2(y2 - y1, x2 - x1)
-
-                sx = x1 + node_radius * np.cos(angle)
-                sy = y1 + node_radius * np.sin(angle)
-                ex = x2 - node_radius * np.cos(angle)
-                ey = y2 - node_radius * np.sin(angle)
-
-                style = f"arc3,rad={rad}"
 
                 ax.annotate(
-                    '',
-                    xy=(ex, ey),
-                    xytext=(sx, sy),
+                    "",
+                    xy=(x2, y2),
+                    xytext=(x1, y1),
                     arrowprops=dict(
-                        arrowstyle='-|>',
-                        color=color,
-                        lw=edge_width,
-                        connectionstyle=style,
-                        mutation_scale=20
+                        arrowstyle="-|>",
+                        color=node_colors[u],
+                        lw=width,
+                        connectionstyle=f"arc3,rad={rad}",
+                        mutation_scale=15
                     ),
-                    zorder=3
+                    zorder=2
                 )
 
-                if rad != 0.0:
-                    mx = (sx + ex) / 2 + rad * 0.5 * np.sin(angle) * (-1 if rad > 0 else 1)
-                    my = (sy + ey) / 2 - rad * 0.5 * np.cos(angle) * (-1 if rad > 0 else 1)
-                else:
-                    mx, my = (sx + ex) / 2, (sy + ey) / 2
-
-                edge_label_positions[(u, v)] = (mx, my)
+                mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+                edge_labels[(u, v)] = (mx, my)
 
         # --- edge labels ---
-        for (u, v), (lx, ly) in edge_label_positions.items():
-            w = G[u][v]['weight']
+        for (u, v), (x, y) in edge_labels.items():
             ax.text(
-                lx, ly, f"{w:.3g}",
+                x, y,
+                f"{G[u][v]['weight']:.3g}",
                 fontsize=7,
-                ha='center',
-                va='center',
-                fontfamily='monospace',
-                color='#222222',
+                ha="center",
+                va="center",
                 bbox=dict(
-                    facecolor='white',
-                    edgecolor='#cccccc',
-                    boxstyle='round,pad=0.25',
-                    alpha=0.95,
-                    linewidth=0.8
+                    facecolor="white",
+                    edgecolor="#cccccc",
+                    boxstyle="round,pad=0.2",
+                    alpha=0.9
                 ),
-                zorder=7
+                zorder=5
             )
 
+        # --- final styling ---
         ax.set_title(
-            "Graf de Transicions · Estructura de l'Oligopoli",
+            "Circular Transition Graph",
             fontsize=14,
-            fontweight='bold',
-            color='#1a1a1a',
-            pad=16,
-            fontfamily='monospace'
+            fontweight="bold"
         )
 
-        ax.set_xlim(-1.4, 1.4)
-        ax.set_ylim(-1.4, 1.4)
-        ax.axis('off')
+        ax.set_axis_off()
+        ax.set_aspect("equal")
 
         plt.tight_layout()
         plt.show()
+
+    def export_flow_data(self, threshold=1e-6, normalize=False):
+        """
+        Export transition matrix into long-format edge list
+        compatible with Flourish + pycirclize.
+        """
+
+        import pandas as pd
+        import numpy as np
+
+        if isinstance(self.transition_matrix, pd.DataFrame):
+            P = self.transition_matrix.copy()
+        else:
+            labels = [f"P{i}" for i in range(len(self.transition_matrix))]
+            P = pd.DataFrame(self.transition_matrix, index=labels, columns=labels)
+
+        if normalize:
+            P = P / P.sum(axis=0)
+
+        df = P.stack().reset_index()
+        df.columns = ["source", "target", "value"]
+
+        # filter weak transitions
+        df = df[df["value"] > threshold].copy()
+
+        return df
+    
+    def plot_chord_local(self, threshold=1e-6):
+        """
+        Local chord diagram using pycirclize (Flourish fallback).
+        """
+
+        from pycirclize import Circos
+        import numpy as np
+
+        df = self.export_flow_data(threshold=threshold)
+
+        # rebuild matrix from long format
+        labels = sorted(set(df["source"]).union(set(df["target"])))
+        index = {l: i for i, l in enumerate(labels)}
+
+        n = len(labels)
+        P = np.zeros((n, n))
+
+        for _, row in df.iterrows():
+            i = index[row["source"]]
+            j = index[row["target"]]
+            P[i, j] = row["value"]
+
+        circos = Circos.initialize_from_matrix(P, space=5)
+
+        for i, sector in enumerate(circos.sectors):
+            sector.name = labels[i]
+
+        for _, row in df.iterrows():
+            circos.add_link(
+                (row["source"], 0, 1),
+                (row["target"], 0, 1),
+                value=row["value"]
+            )
+
+        fig = circos.plotfig()
+        return fig
+    
+    def export_all(self):
+        """
+        Full pipeline:
+        - exports Flourish CSV
+        - returns local chord diagram fallback data
+        """
+
+        df = self.export_for_flourish()
+
+        print("\nPipeline complete:")
+        print("- Flourish CSV ready")
+        print("- Local chord available via plot_chord_local()")
+
+        return df
+        
+    def export_for_flourish(self, path="flourish_chord.csv", threshold=1e-6):
+        """
+        Saves a Flourish-ready CSV for chord diagram.
+        """
+
+        df = self.export_flow_data(threshold=threshold)
+        df.to_csv(path, index=False)
+
+        print(f"[OK] Flourish file saved: {path}")
+        return df
 
 if __name__ == "__main__":
     # Dades electorals d'exemple (sense NaNs, mateixos partits)
@@ -610,8 +901,10 @@ if __name__ == "__main__":
 
     print("\nDistribució Estacionària:")
     print(mc.get_steady_state())
-    mc.plot_transition_matrix()
-    mc.plot_steady_state()
-    mc.plot_graph()
+    mc.export_for_flourish("election_flows.csv")
+    mc.plot_chord()
+    # mc.plot_transition_matrix()
+    # mc.plot_steady_state()
+    # mc.plot_graph()
     
     
