@@ -79,6 +79,16 @@ class StableMarkovChain:
                 'type': 'eq',
                 'fun': lambda P_flat, r=r: np.sum(P_flat.reshape((n_parties, n_parties))[:, r]) - 1.0
             })
+
+        # --- Restricció: Cs no rep vots de ningú (fila de Cs a zero) ---
+        # if "Cs" in self.columns:
+        #     idx_cs = list(self.columns).index("Cs")
+        #     for c in range(n_parties):
+        #         constraints.append({
+        #             'type': 'eq',
+        #             # FIX: Afegim c=c per congelar el valor de la columna a cada iteració
+        #             'fun': lambda P_flat, c=c: P_flat.reshape((n_parties, n_parties))[idx_cs, c]
+        #         })
         
         # Tots els valors de P entre 0 i 1
         bounds = [(0, 1) for _ in range(n_parties * n_parties)]
@@ -99,9 +109,23 @@ class StableMarkovChain:
             col_sums = optimized_matrix.sum(axis=0, keepdims=True)
             optimized_matrix = optimized_matrix / col_sums
             
+            # Creem el DataFrame original amb la veritat històrica
             self.transition_matrix = pd.DataFrame(optimized_matrix, index=self.columns, columns=self.columns)
+            
+            # Modifiquem la matriu final per a les prediccions de futur
+            # =========================================================================
+            if "Cs" in self.transition_matrix.index:
+                print("Simulant l'extinció de 'Cs' per a futures prediccions...")
+                # Posem la fila a 0: a partir d'ara ningú el pot votar (les properes eleccions donaran 0)
+                self.transition_matrix.loc["Cs", :] = 0.0
+                
+                # Renormalitzem les columnes per redistribuir la seva herència electoral
+                new_col_sums = self.transition_matrix.sum(axis=0)
+                new_col_sums[new_col_sums == 0] = 1.0
+                self.transition_matrix = self.transition_matrix.div(new_col_sums, axis=1)
+            # =========================================================================
+
             print(f"Model ajustat correctament amb pesos temporals (Decay Rate: {decay_rate})")
-            print(f"Pesos aplicats per pas (de més antic a més recent): {np.round(time_weights, 2)}")
         else:
             print("Avís: L'optimització no ha convergit.")
             
@@ -127,61 +151,22 @@ class StableMarkovChain:
 
         if is_irreducible:
             # CAS IRREDUCTIBLE
+            print("La matriu és irreductible. Calculant distribució estacionària amb valors propis...")
             eigenvalues, eigenvectors = np.linalg.eig(P)
             idx = np.argmin(np.abs(eigenvalues - 1))
             pi = np.real(eigenvectors[:, idx])
             pi = pi / pi.sum()
             steady_state = pd.Series(pi, index=labels)
         else:
-            print("La matriu és reductible. Calculant comportament a llarg termini...")
+            print("La matriu és reductible. Calculant comportament a llarg termini amb P^1000...")
             P_n = np.linalg.matrix_power(P, 1000)
-            steady_state_avg = P_n.mean(axis=1) 
-            steady_state = pd.Series(steady_state_avg, index=labels)
+            pi = P_n[:, 0] 
+            # CRUCIAL: Forçar que la suma de quotes de votants doni exactament 1.0 (100%)
+            pi = pi / pi.sum()
+            steady_state = pd.Series(pi, index=labels)
             
         self.steady_state = steady_state
         return steady_state
-    """def get_steady_state(self):
-        
-        Calcula la distribució estacionària π tal que P @ π = π.
-        Convenció columna suma 1: busquem el vector propi DRET de P associat a λ=1.
-    
-        if isinstance(self.transition_matrix, pd.DataFrame):
-            P = self.transition_matrix.values
-        else:
-            P = self.transition_matrix
-        
-        # 2. Comprovem irreductibilitat
-        G = nx.DiGraph()
-        n = P.shape[0]
-        for i in range(n):
-            for j in range(n):
-                if P[i, j] > 0:
-                    G.add_edge(j, i)
-        is_irreducible = nx.is_strongly_connected(G)
-        
-        if is_irreducible:
-
-            # Convenció columna: busquem vectors propis DRETS (P @ v = v)
-            eigenvalues, eigenvectors = np.linalg.eig(P)
-
-            # Trobem l'índex del valor propi més proper a 1
-            idx = np.argmin(np.abs(eigenvalues - 1))
-
-            # Extraiem el vector i normalitzem (suma = 1)
-            pi = np.real(eigenvectors[:, idx])
-            pi = pi / pi.sum()
-
-            steady_state = pd.Series(pi, index=self.columns)
-            self.steady_state = steady_state
-            return steady_state
-        else:
-            print("La matriu no és irreductible. No es pot garantir una distribució estacionària única.")
-            print("Calculant el comportament a llarg termini buscant classes absorbents...")
-            P_n = np.linalg.matrix_power(P, 1000)
-            steady_state_avg = P_n.mean(axis=1)  
-            steady_state = pd.Series(steady_state_avg, index=self.columns)           
-            self.steady_state = steady_state
-            return steady_state"""
 
     def __str__(self):
         output = f"Model de Cadena de Markov Estable ({self.num_rows} Anys, {self.num_columns} Partits)\n"
@@ -274,7 +259,7 @@ class StableMarkovChain:
         ax.set_aspect("equal")
 
         ax.set_xlim(-1.1, 1.1)
-        ax.set_ylim(-0.05, 1.1)
+        ax.set_ylim(0, 1)
 
         ax.axis("off")
 
@@ -290,12 +275,12 @@ class StableMarkovChain:
             frameon=False
         )
 
-        fig.suptitle(
-            "Solució Estable",
-            fontsize=16,
-            fontweight="bold",
-            y=0.95
-        )
+        # fig.suptitle(
+        #     "Solució Estable",
+        #     fontsize=16,
+        #     fontweight="bold",
+        #     y=0.95
+        # )
 
         if abst > 0:
             fig.text(
