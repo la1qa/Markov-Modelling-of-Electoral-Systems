@@ -8,6 +8,9 @@ from pyvis.network import Network
 import plotly.graph_objects as go
 from pycirclize import Circos
 from pycirclize.parser import Matrix
+from matplotlib.patches import Wedge
+import matplotlib.pyplot as plt
+import numpy as np
 
 class StableMarkovChain:
     def __init__(self, df, transition_matrix=None):
@@ -223,102 +226,92 @@ class StableMarkovChain:
         plt.tight_layout()
         plt.show()
 
-    def plot_steady_state(self):
-        """Visualitza la distribució estacionària com a semicercle."""
+    def plot_steady_state(self, filename=None):
 
-        # 1. Calculem la distribució estacionària si no existeix
-        if not hasattr(self, 'steady_state') or self.steady_state is None:
+        if not hasattr(self, "steady_state") or self.steady_state is None:
             self.steady_state = self.get_steady_state()
-            
-        total_distribution = self.steady_state
-        
-        # 2. Extraiem Abstenció abans d'eliminar-la del gràfic principal
-        if "Abstenció" in total_distribution.index:
-            abstencio_share = total_distribution["Abstenció"]
-            active_parties = total_distribution.drop("Abstenció")
-        else:
-            abstencio_share = 0.0
-            active_parties = total_distribution
 
-        # 3. Ordenem de major a menor (d'esquerra a dreta)
-        active_parties = active_parties.sort_values(ascending=False)
+        dist = self.steady_state.copy()
 
-        # 4. Renormalitzem els partits actius perquè sumin 1.0
-        active_sum = active_parties.sum()
-        if active_sum == 0:
-            print("Error: No hi ha vots de partits actius per mostrar.")
+        abst = dist.get("Abstenció", 0.0)
+
+        if "Abstenció" in dist.index:
+            dist = dist.drop("Abstenció")
+
+        dist = dist.sort_values(ascending=False)
+
+        if dist.sum() == 0:
             return
-            
-        normalized_shares = (active_parties / active_sum).values.tolist()
-        active_labels = active_parties.index.tolist()
-        original_shares = active_parties.values.tolist()
-        
-        # 5. Afegim la porció dummy per tancar el semicercle
-        shares_with_dummy = normalized_shares + [1.0]
-        
-        # 6. Generem colors dinàmics amb paleta qualitativa per distingir millor
-        num_active = len(normalized_shares)
-        custom_palette = [
-            '#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#3B7A57',
-            '#7B2D8B', '#44BBA4', '#E94F37', '#F5A623', '#1B4F72', '#117A65'
-        ]
-        # Repeat palette if more colors are needed
-        if num_active <= len(custom_palette):
-            active_colors = custom_palette[:num_active]
-        else:
-            reps = (num_active // len(custom_palette)) + 1
-            active_colors = (custom_palette * reps)[:num_active]
-        
-        # Color completament transparent per la meitat inferior oculta
-        colors_with_dummy = list(active_colors) + [(0, 0, 0, 0)]
-        
-        # 7. Construïm les etiquetes amb doble percentatge
-        custom_labels = []
-        for label, norm_share, orig_share in zip(active_labels, normalized_shares, original_shares):
-            custom_labels.append(
-                f"{label}\n" 
-                f"({orig_share * 100:.1f}% del cens)"
-                if norm_share > 0.1 else 
-                f"{label} "
-                f"({orig_share * 100:.1f}% del cens)"
-            )
-            
-        custom_labels += [""]
 
-        # 8. Dibuixem el gràfic amb estil refinat
-        plt.rcParams['font.sans-serif'] = 'Arial'
-        plt.rcParams['text.color'] = '#333333'
-        
-        fig, ax = plt.subplots(figsize=(8.5, 4.5))
-        
-        ax.pie(
-            shares_with_dummy, 
-            labels=custom_labels, 
-            autopct='', 
-            startangle=180, 
-            counterclock=False,
-            colors=colors_with_dummy,
-            labeldistance=1.3,
-            wedgeprops={'edgecolor': 'white', 'linewidth': 1.5, 'antialiased': True},
-            textprops={'fontsize': 9.0, 'color': '#333333'}
-        )
-        
-        # Retallem per mostrar només el semicercle superior
-        ax.set_xlim(-1.35, 1.35)
-        ax.set_ylim(0, 1.35)
-        
-        # Nota a peu de pàgina amb les dades d'abstenció
-        if abstencio_share > 0:
-            plt.text(
-                0, -0.15, 
-                f"*'Abstenció' ({abstencio_share*100:.1f}% del cens total)", 
-                ha='center', va='center', fontsize=9.5, style='italic', color='#666666'
+        shares = dist / dist.sum()
+
+        colors = [
+            '#2E86AB', '#A23B72', '#F18F01', '#C73E1D',
+            '#3B7A57', '#7B2D8B', '#44BBA4', '#E94F37',
+            '#F5A623', '#1B4F72'
+        ]
+
+        fig, ax = plt.subplots(figsize=(12, 4))
+
+        start = 180
+
+        for share, color in zip(shares, colors):
+            angle = share * 180
+
+            wedge = Wedge(
+                center=(0, 0),
+                r=1.0,
+                theta1=start-angle,
+                theta2=start,
+                facecolor=color,
+                edgecolor="white",
+                linewidth=2
             )
+
+            ax.add_patch(wedge)
+            start -= angle
+
+        ax.set_aspect("equal")
+
+        ax.set_xlim(-1.1, 1.1)
+        ax.set_ylim(-0.05, 1.1)
+
+        ax.axis("off")
+
+        labels = [
+            f"{p} ({100*v:.1f}%)"
+            for p, v in dist.items()
+        ]
+
+        ax.legend(
+            labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False
+        )
+
+        fig.suptitle(
+            "Solució Estable",
+            fontsize=16,
+            fontweight="bold",
+            y=0.95
+        )
+
+        if abst > 0:
+            fig.text(
+                0.35,
+                0.02,
+                f"Abstenció: {100*abst:.1f}% del cens",
+                ha="center",
+                style="italic",
+                color="gray"
+            )
+
+        if filename:
+            plt.savefig('imgs/' + filename, dpi=300, bbox_inches='tight')
         
-        plt.title("Solució Estable", pad=25, fontsize=13, weight='bold', color='#1A1A1A')
-        plt.tight_layout()
         plt.show()
-        
+
     def verify_steady_state(self):
         """
         Verifica les hipòtesis d'existència d'una única distribució estacionària
@@ -603,48 +596,48 @@ class StableMarkovChain:
     #     plt.tight_layout()
     #     plt.show()
 
-    def plot_chord(self):
-        # --- extract matrix ---
-        if isinstance(self.transition_matrix, pd.DataFrame):
-            P = self.transition_matrix.values
-            labels = list(self.transition_matrix.columns)
-        else:
-            P = np.asarray(self.transition_matrix)
-            labels = [f"S{i}" for i in range(len(P))]
+    # def plot_chord(self):
+        # # --- extract matrix ---
+        # if isinstance(self.transition_matrix, pd.DataFrame):
+        #     P = self.transition_matrix.values
+        #     labels = list(self.transition_matrix.columns)
+        # else:
+        #     P = np.asarray(self.transition_matrix)
+        #     labels = [f"S{i}" for i in range(len(P))]
 
-        P = np.asarray(P, dtype=float)
-        n = len(labels)
+        # P = np.asarray(P, dtype=float)
+        # n = len(labels)
 
-        # Build a DataFrame for pycirclize which expects a Matrix-like object with names
-        matrix_df = pd.DataFrame(P, index=labels, columns=labels)
+        # # Build a DataFrame for pycirclize which expects a Matrix-like object with names
+        # matrix_df = pd.DataFrame(P, index=labels, columns=labels)
 
-        # Try pycirclize first; if it fails, fall back to a Plotly Sankey
-        try:
-            circos = Circos.initialize_from_matrix(matrix_df, space=3,
-                                                    r_lim=(93, 100),
-                                                    cmap="tab10",
-                                                    ticks_interval=0.5,
-                                                    label_kws=dict(r=94, size=12, color="white"),)
+        # # Try pycirclize first; if it fails, fall back to a Plotly Sankey
+        # try:
+        #     circos = Circos.initialize_from_matrix(matrix_df, space=3,
+        #                                             r_lim=(93, 100),
+        #                                             cmap="tab10",
+        #                                             ticks_interval=0.5,
+        #                                             label_kws=dict(r=94, size=12, color="white"),)
 
-            # Plot and obtain matplotlib Figure
-            fig = circos.plotfig()
+        #     # Plot and obtain matplotlib Figure
+        #     fig = circos.plotfig()
 
-            # Save using pycirclize's savefig if available, otherwise use fig.savefig
-            from datetime import datetime
-            fname = f"chord_diagram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            try:
-                circos.savefig(fname)
-            except Exception:
-                try:
-                    fig.savefig(fname, bbox_inches='tight', dpi=150)
-                except Exception:
-                    pass
+        #     # Save using pycirclize's savefig if available, otherwise use fig.savefig
+        #     from datetime import datetime
+        #     fname = f"chord_diagram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        #     try:
+        #         circos.savefig(fname)
+        #     except Exception:
+        #         try:
+        #             fig.savefig(fname, bbox_inches='tight', dpi=150)
+        #         except Exception:
+        #             pass
 
-            return fig
-        except Exception:
-            print("pycirclize no disponible o ha fallado. Usando Plotly para un diagrama de Sankey alternativo.")
-            self.plot_graph()
-            return None
+        #     return fig
+        # except Exception:
+        #     print("pycirclize no disponible o ha fallado. Usando Plotly para un diagrama de Sankey alternativo.")
+        #     self.plot_graph()
+        #     return None
 
     def plot_graph(self):
         """
@@ -710,7 +703,7 @@ class StableMarkovChain:
             ax.text(
                 x, y, str(n),
                 ha="center", va="center",
-                fontsize=9, color="white", fontweight="bold",
+                fontsize=9, color="black", fontweight="bold",
                 zorder=4
             )
 
@@ -794,33 +787,21 @@ class StableMarkovChain:
         plt.tight_layout()
         plt.show()
 
-    def export_flow_data(self, threshold=1e-6, normalize=False):
-        """
-        Export transition matrix into long-format edge list
-        compatible with Flourish + pycirclize.
-        """
+    def export_flow_data(self, threshold=1e-6):
+        P = self.transition_matrix.copy()
 
-        import pandas as pd
-        import numpy as np
+        shares = self.df.iloc[-1]  # latest election
 
-        if isinstance(self.transition_matrix, pd.DataFrame):
-            P = self.transition_matrix.copy()
-        else:
-            labels = [f"P{i}" for i in range(len(self.transition_matrix))]
-            P = pd.DataFrame(self.transition_matrix, index=labels, columns=labels)
+        flow_matrix = P.mul(shares, axis=1)
 
-        if normalize:
-            P = P / P.sum(axis=0)
+        df = flow_matrix.stack().reset_index()
+        df.columns = ["target", "source", "value"]
 
-        df = P.stack().reset_index()
-        df.columns = ["source", "target", "value"]
-
-        # filter weak transitions
-        df = df[df["value"] > threshold].copy()
+        df = df[df["value"] > threshold]
 
         return df
     
-    def plot_chord_local(self, threshold=1e-6):
+    def plot_chord(self, threshold=1e-6):
         """
         Local chord diagram using pycirclize (Flourish fallback).
         """
@@ -829,33 +810,38 @@ class StableMarkovChain:
         import numpy as np
 
         df = self.export_flow_data(threshold=threshold)
+        # Reorder columns to [from, to, value]
+        df = df[["source", "target", "value"]]
 
-        # rebuild matrix from long format
-        labels = sorted(set(df["source"]).union(set(df["target"])))
-        index = {l: i for i, l in enumerate(labels)}
+        matrix_df = Matrix.parse_fromto_table(df)
 
-        n = len(labels)
-        P = np.zeros((n, n))
+        # Try pycirclize first; if it fails, fall back to a Plotly Sankey
+        try:
+            circos = Circos.initialize_from_matrix(matrix_df, space=3,
+                                                    r_lim=(93, 100),
+                                                    cmap="tab10",
+                                                    ticks_interval=0.5,
+                                                    label_kws=dict(r=94, size=12, color="white"),)
 
-        for _, row in df.iterrows():
-            i = index[row["source"]]
-            j = index[row["target"]]
-            P[i, j] = row["value"]
+            # Plot and obtain matplotlib Figure
+            fig = circos.plotfig()
 
-        circos = Circos.initialize_from_matrix(P, space=5)
+            # Save using pycirclize's savefig if available, otherwise use fig.savefig
+            from datetime import datetime
+            fname = f"chord_diagram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            try:
+                circos.savefig('imgs/' + fname)
+            except Exception:
+                try:
+                    fig.savefig('imgs/' + fname, bbox_inches='tight', dpi=150)
+                except Exception:
+                    pass
 
-        for i, sector in enumerate(circos.sectors):
-            sector.name = labels[i]
-
-        for _, row in df.iterrows():
-            circos.add_link(
-                (row["source"], 0, 1),
-                (row["target"], 0, 1),
-                value=row["value"]
-            )
-
-        fig = circos.plotfig()
-        return fig
+            return
+        except Exception as e:
+            print(f"pycirclize no disponible o ha fallado. Usando Plotly para un diagrama de Sankey alternativo. Error: {e}")
+            self.plot_graph()
+            return 
     
     def export_all(self):
         """
@@ -878,7 +864,7 @@ class StableMarkovChain:
         """
 
         df = self.export_flow_data(threshold=threshold)
-        df.to_csv(path, index=False)
+        df.to_csv('election_flows_data/' + path, index=False)
 
         print(f"[OK] Flourish file saved: {path}")
         return df
@@ -901,10 +887,10 @@ if __name__ == "__main__":
 
     print("\nDistribució Estacionària:")
     print(mc.get_steady_state())
-    mc.export_for_flourish("election_flows.csv")
-    mc.plot_chord()
+    # mc.export_for_flourish("election_flows.csv")
+    # mc.plot_chord()
     # mc.plot_transition_matrix()
-    # mc.plot_steady_state()
+    mc.plot_steady_state()
     # mc.plot_graph()
     
     
