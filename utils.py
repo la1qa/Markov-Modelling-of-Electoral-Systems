@@ -12,6 +12,10 @@ from matplotlib.patches import Wedge
 import matplotlib.pyplot as plt
 import numpy as np
 
+import random
+import difflib  # Llibreria nativa de Python per trobar paraules similars
+
+
 class StableMarkovChain:
     def __init__(self, df, transition_matrix=None):
         self.columns = df.columns
@@ -211,6 +215,7 @@ class StableMarkovChain:
         plt.tight_layout()
         plt.show()
 
+
     def plot_steady_state(self, filename=None):
 
         if not hasattr(self, "steady_state") or self.steady_state is None:
@@ -218,6 +223,7 @@ class StableMarkovChain:
 
         dist = self.steady_state.copy()
 
+        # Guardem l'abstenció abans d'eliminar-la de la distribució
         abst = dist.get("Abstenció", 0.0)
 
         if "Abstenció" in dist.index:
@@ -230,11 +236,63 @@ class StableMarkovChain:
 
         shares = dist / dist.sum()
 
-        colors = [
-            '#2E86AB', '#A23B72', '#F18F01', '#C73E1D',
-            '#3B7A57', '#7B2D8B', '#44BBA4', '#E94F37',
-            '#F5A623', '#1B4F72'
-        ]
+        # Diccionari de colors oficials
+        color_mapping = {
+            "PSC": "#E30613",
+            "JUNTS": "#00C3B2",
+            "ERC": "#FFB232",
+            "PP": "#0054A6",
+            "VOX": "#63BE21",
+            "COMUNS": "#8A2574",
+            "CUP": "#FFF200",
+            "ALIANÇA.CAT": "#030442",
+            "Altres": "#A0A0A0",
+            "Cs": "#EB6100",
+            "Abstenció": "#555555",
+        }
+
+        # Funció per generar un color HEX aleatori
+        def get_random_color():
+            return f"#{random.randint(0, 255):02X}{random.randint(0, 255):02X}{random.randint(0, 255):02X}"
+
+        # Llista final de colors per a l'hemicicle
+        # Llista final de colors per a l'hemicicle
+        colors = []
+
+        for partit in dist.index:
+            partit_upper = (
+                partit.upper()
+            )  # Ho passem a majúscules per evitar errors de "junts" vs "JUNTS"
+            color_trobat = None
+
+            # 1. COINCIDÈNCIA EXACTA
+            if partit in color_mapping:
+                color_trobat = color_mapping[partit]
+
+            # 2. CERCA PER SUBCADENA (Ideal per a "JUNTS+ALIANÇA", "PSC-CP", etc.)
+            else:
+                for clau in color_mapping.keys():
+                    # Evitem comparar amb 'Altres' o 'Abstenció' en aquest pas de subcadenes
+                    if clau in ["Altres", "Abstenció"]:
+                        continue
+
+                    if clau in partit_upper:
+                        color_trobat = color_mapping[clau]
+                        break  # Si troba "JUNTS" primer, es queda amb aquest color i surt del bucle
+
+            # 3. CERCA PER SEMBLANÇA GENÈRICA (Fuzzy)
+            if not color_trobat:
+                coincidencies = difflib.get_close_matches(
+                    partit, color_mapping.keys(), n=1, cutoff=0.3
+                )
+                if coincidencies:
+                    color_trobat = color_mapping[coincidencies[0]]
+
+            # 4. FALLBACK ALEATORI (Si tot l'anterior falla)
+            if not color_trobat:
+                color_trobat = get_random_color()
+
+            colors.append(color_trobat)
 
         fig, ax = plt.subplots(figsize=(12, 4))
 
@@ -246,11 +304,11 @@ class StableMarkovChain:
             wedge = Wedge(
                 center=(0, 0),
                 r=1.0,
-                theta1=start-angle,
+                theta1=start - angle,
                 theta2=start,
                 facecolor=color,
                 edgecolor="white",
-                linewidth=2
+                linewidth=2,
             )
 
             ax.add_patch(wedge)
@@ -263,24 +321,11 @@ class StableMarkovChain:
 
         ax.axis("off")
 
-        labels = [
-            f"{p} ({100*v:.1f}%)"
-            for p, v in dist.items()
-        ]
+        labels = [f"{p} ({100*v:.1f}%)" for p, v in dist.items()]
 
         ax.legend(
-            labels,
-            loc="center left",
-            bbox_to_anchor=(1.02, 0.5),
-            frameon=False
+            labels, loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False
         )
-
-        # fig.suptitle(
-        #     "Solució Estable",
-        #     fontsize=16,
-        #     fontweight="bold",
-        #     y=0.95
-        # )
 
         if abst > 0:
             fig.text(
@@ -289,12 +334,12 @@ class StableMarkovChain:
                 f"Abstenció: {100*abst:.1f}% del cens",
                 ha="center",
                 style="italic",
-                color="gray"
+                color=color_mapping["Abstenció"],
             )
 
         if filename:
-            plt.savefig('imgs/' + filename, dpi=300, bbox_inches='tight')
-        
+            plt.savefig("imgs/" + filename, dpi=300, bbox_inches="tight")
+
         plt.show()
 
     def verify_steady_state(self):
