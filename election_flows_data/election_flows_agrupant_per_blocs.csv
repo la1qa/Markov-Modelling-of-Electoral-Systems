@@ -1,28 +1,28 @@
 target,source,value
-Altres,Altres,0.013937249747138709
-Altres,Dreta espanyola,7.33459886573798e-05
-Altres,Dreta catalana,2.995617803056038e-05
-Altres,Esquerra catalana,0.00019500971596555787
-Altres,Esquerra espanyola,0.0004221373207445454
-Abstenció,Abstenció,0.266091726081829
-Abstenció,Dreta espanyola,0.04976940724663666
-Abstenció,Esquerra catalana,0.04612365791897757
-Abstenció,Esquerra espanyola,0.04798662930262484
-Dreta espanyola,Altres,0.0016313277480041633
-Dreta espanyola,Abstenció,0.04641798917445091
-Dreta espanyola,Dreta espanyola,0.04326840166530224
-Dreta espanyola,Dreta catalana,0.02436577075156297
-Dreta espanyola,Esquerra catalana,0.0020784897701348775
-Dreta catalana,Altres,2.876154895272484e-05
-Dreta catalana,Abstenció,0.08594058193555373
-Dreta catalana,Dreta catalana,0.07553829849570808
-Dreta catalana,Esquerra espanyola,0.005568251085426816
-Esquerra catalana,Altres,0.0010116609559044014
-Esquerra catalana,Dreta espanyola,0.011504870256297702
-Esquerra catalana,Dreta catalana,0.03764197006736551
-Esquerra catalana,Esquerra catalana,0.046852725961989014
-Esquerra espanyola,Abstenció,0.05335470280816628
-Esquerra espanyola,Dreta espanyola,0.0004839748431060189
-Esquerra espanyola,Dreta catalana,0.003073004507332865
-Esquerra espanyola,Esquerra catalana,0.003161116632932985
-Esquerra espanyola,Esquerra espanyola,0.13344798229120383
+Altres,Altres,0.013937249476534545
+Altres,Dreta espanyola,7.334565290601965e-05
+Altres,Dreta catalana,2.9956866293630068e-05
+Altres,Esquerra catalana,0.0001950078630539734
+Altres,Esquerra espanyola,0.00042213826219935485
+Abstenció,Abstenció,0.26609168195105093
+Abstenció,Dreta espanyola,0.04976941408176846
+Abstenció,Esquerra catalana,0.046123648261659975
+Abstenció,Esquerra espanyola,0.04798661905135638
+Dreta espanyola,Altres,0.00163132801887461
+Dreta espanyola,Abstenció,0.04641802746749744
+Dreta espanyola,Dreta espanyola,0.043268399292114824
+Dreta espanyola,Dreta catalana,0.024365775079841886
+Dreta espanyola,Esquerra catalana,0.0020785086729613457
+Dreta catalana,Altres,2.8761634750732012e-05
+Dreta catalana,Abstenció,0.08594056563517959
+Dreta catalana,Dreta catalana,0.07553829171050762
+Dreta catalana,Esquerra espanyola,0.005568270818457857
+Esquerra catalana,Altres,0.0010116608698401122
+Esquerra catalana,Dreta espanyola,0.011504873898677753
+Esquerra catalana,Dreta catalana,0.03764197083359861
+Esquerra catalana,Esquerra catalana,0.04685271148148069
+Esquerra espanyola,Abstenció,0.05335472494627205
+Esquerra espanyola,Dreta espanyola,0.000483967074532947
+Esquerra espanyola,Dreta catalana,0.003073005509758255
+Esquerra espanyola,Esquerra catalana,0.003161123720844021
+Esquerra espanyola,Esquerra espanyola,0.1334479718679864
